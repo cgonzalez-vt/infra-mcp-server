@@ -164,13 +164,31 @@ func main() {
 		logger.Info("No database connections detected")
 	}
 
-	// Register tools
+	// Register database tools
 	if err := toolRegistry.RegisterAllTools(ctx, dbUseCase); err != nil {
 		logger.Error("Failed to register tools: %v", err)
 		logger.Error("Cannot start server without database connections")
 		os.Exit(1)
 	}
-	logger.Info("Finished registering tools")
+	logger.Info("Finished registering database tools")
+
+	// Initialize and register AWS tools if profiles are configured
+	if len(cfg.AWSProfiles) > 0 {
+		logger.Info("Initializing AWS integration with %d profile(s)", len(cfg.AWSProfiles))
+		awsManager := mcp.NewAWSManager()
+
+		if err := awsManager.InitializeProfiles(ctx, cfg.AWSProfiles); err != nil {
+			logger.Warn("Failed to initialize AWS profiles: %v", err)
+		} else {
+			if err := awsManager.RegisterTools(ctx, mcpServer); err != nil {
+				logger.Warn("Failed to register AWS tools: %v", err)
+			} else {
+				logger.Info("Successfully registered AWS tools")
+			}
+		}
+	} else {
+		logger.Info("No AWS profiles configured, skipping AWS integration")
+	}
 
 	// If we have databases, display the available tools
 	if len(dbIDs) > 0 {
@@ -183,7 +201,6 @@ func main() {
 		logger.Info("  Common tools:")
 		logger.Info("    - list_databases: List all available databases")
 	}
-
 
 	// Create a session store to track valid sessions
 	sessions := make(map[string]bool)

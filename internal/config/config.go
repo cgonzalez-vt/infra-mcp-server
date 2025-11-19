@@ -10,6 +10,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/FreePeak/db-mcp-server/internal/logger"
+	awspkg "github.com/FreePeak/db-mcp-server/pkg/aws"
 	"github.com/FreePeak/db-mcp-server/pkg/db"
 )
 
@@ -18,10 +19,11 @@ type Config struct {
 	ServerPort     int
 	TransportMode  string
 	LogLevel       string
-	DBConfig       DatabaseConfig    // Legacy single database config
-	MultiDBConfig  *db.MultiDBConfig // New multi-database config
-	ConfigPath     string            // Path to the configuration file
-	DisableLogging bool              // When true, disables logging in stdio/SSE transport
+	DBConfig       DatabaseConfig         // Legacy single database config
+	MultiDBConfig  *db.MultiDBConfig      // New multi-database config
+	AWSProfiles    []awspkg.ProfileConfig // AWS profile configurations
+	ConfigPath     string                 // Path to the configuration file
+	DisableLogging bool                   // When true, disables logging in stdio/SSE transport
 }
 
 // DatabaseConfig holds database configuration (legacy support)
@@ -105,12 +107,21 @@ func LoadConfig() (*Config, error) {
 			return nil, fmt.Errorf("failed to read config file %s: %w", config.ConfigPath, err)
 		}
 
-		var multiDBConfig db.MultiDBConfig
-		if err := json.Unmarshal(configData, &multiDBConfig); err != nil {
+		// Parse the full config including AWS profiles
+		var fullConfig struct {
+			Connections []db.DatabaseConnectionConfig `json:"connections"`
+			AWSProfiles []awspkg.ProfileConfig        `json:"aws_profiles"`
+		}
+		if err := json.Unmarshal(configData, &fullConfig); err != nil {
 			return nil, fmt.Errorf("failed to parse config file %s: %w", config.ConfigPath, err)
 		}
 
-		config.MultiDBConfig = &multiDBConfig
+		config.MultiDBConfig = &db.MultiDBConfig{
+			Connections: fullConfig.Connections,
+		}
+		config.AWSProfiles = fullConfig.AWSProfiles
+
+		logger.Info("Loaded %d database connections and %d AWS profiles", len(fullConfig.Connections), len(fullConfig.AWSProfiles))
 	} else {
 		logger.Info("Warning: Config file not found at %s, using environment variables", config.ConfigPath)
 		// If no JSON config found, create a single connection config from environment variables
