@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/FreePeak/db-mcp-server/internal/delivery/mcp"
+	"github.com/FreePeak/infra-mcp-server/internal/delivery/mcp"
 )
 
 func TestHypertableSchemaProvider(t *testing.T) {

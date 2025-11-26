@@ -1,13 +1,13 @@
 <div align="center">
 
-<img src="assets/logo.svg" alt="DB MCP Server Logo" width="300" />
+<img src="assets/logo.svg" alt="Infrastructure MCP Server Logo" width="300" />
 
 # Multi Database MCP Server
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Go Report Card](https://goreportcard.com/badge/github.com/FreePeak/db-mcp-server)](https://goreportcard.com/report/github.com/FreePeak/db-mcp-server)
-[![Go Reference](https://pkg.go.dev/badge/github.com/FreePeak/db-mcp-server.svg)](https://pkg.go.dev/github.com/FreePeak/db-mcp-server)
-[![Contributors](https://img.shields.io/github/contributors/FreePeak/db-mcp-server)](https://github.com/FreePeak/db-mcp-server/graphs/contributors)
+[![Go Report Card](https://goreportcard.com/badge/github.com/FreePeak/infra-mcp-server)](https://goreportcard.com/report/github.com/FreePeak/infra-mcp-server)
+[![Go Reference](https://pkg.go.dev/badge/github.com/FreePeak/infra-mcp-server.svg)](https://pkg.go.dev/github.com/FreePeak/infra-mcp-server)
+[![Contributors](https://img.shields.io/github/contributors/FreePeak/infra-mcp-server)](https://github.com/FreePeak/infra-mcp-server/graphs/contributors)
 
 <h3>A powerful multi-database server implementing the Model Context Protocol (MCP) to provide AI assistants with structured access to databases.</h3>
 
@@ -28,13 +28,13 @@
 
 ## Overview
 
-The DB MCP Server provides a standardized way for AI models to interact with multiple databases simultaneously. Built on the [FreePeak/cortex](https://github.com/FreePeak/cortex) framework, it enables AI assistants to execute SQL queries, manage transactions, explore schemas, and analyze performance across different database systems through a unified interface.
+The Infrastructure MCP Server provides a standardized way for AI models to interact with multiple databases simultaneously. Built on the [FreePeak/cortex](https://github.com/FreePeak/cortex) framework, it enables AI assistants to execute SQL queries, manage transactions, explore schemas, and analyze performance across different database systems through a unified interface.
 
 ## Core Concepts
 
 ### Multi-Database Support
 
-Unlike traditional database connectors, DB MCP Server can connect to and interact with multiple databases concurrently:
+Unlike traditional database connectors, Infrastructure MCP Server can connect to and interact with multiple databases concurrently:
 
 ```json
 {
@@ -103,20 +103,20 @@ The server follows Clean Architecture principles with these layers:
 
 ## Deployment Options
 
-The DB MCP Server can be deployed in multiple ways to suit different environments and integration needs:
+The Infrastructure MCP Server can be deployed in multiple ways to suit different environments and integration needs:
 
 ### Docker Deployment
 
 ```bash
 # Pull the latest image
-docker pull freepeak/db-mcp-server:latest
+docker pull freepeak/infra-mcp-server:latest
 
 # Run with mounted config file
 docker run -p 9092:9092 \
   -v $(pwd)/config.json:/app/my-config.json \
   -e TRANSPORT_MODE=sse \
   -e CONFIG_PATH=/app/my-config.json \
-  freepeak/db-mcp-server
+  freepeak/infra-mcp-server
 ```
 
 > **Note**: Mount to `/app/my-config.json` as the container has a default file at `/app/config.json`.
@@ -133,8 +133,8 @@ For Cursor IDE integration, add to `.cursor/mcp.json`:
 ```json
 {
   "mcpServers": {
-    "stdio-db-mcp-server": {
-      "command": "/path/to/db-mcp-server/server",
+    "stdio-infra-mcp-server": {
+      "command": "/path/to/infra-mcp-server/server",
       "args": ["-t", "stdio", "-c", "/path/to/config.json"]
     }
   }
@@ -157,8 +157,8 @@ Client connection endpoint: `http://localhost:9092/sse`
 
 ```bash
 # Clone the repository
-git clone https://github.com/FreePeak/db-mcp-server.git
-cd db-mcp-server
+git clone https://github.com/FreePeak/infra-mcp-server.git
+cd infra-mcp-server
 
 # Build the server
 make build
@@ -222,7 +222,7 @@ export DB_CONFIG='{"connections":[...]}'
 
 ## Available Tools
 
-For each connected database, DB MCP Server automatically generates these specialized tools:
+For each connected database, Infrastructure MCP Server automatically generates these specialized tools:
 
 ### Query Tools
 
@@ -320,7 +320,7 @@ Enable verbose logging for troubleshooting:
 
 ## Contributing
 
-We welcome contributions to the DB MCP Server project! To contribute:
+We welcome contributions to the Infrastructure MCP Server project! To contribute:
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)

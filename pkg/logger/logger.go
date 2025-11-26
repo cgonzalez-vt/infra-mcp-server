@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	intLogger "github.com/FreePeak/db-mcp-server/internal/logger"
+	intLogger "github.com/FreePeak/infra-mcp-server/internal/logger"
 )
 
 var (

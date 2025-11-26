@@ -3,7 +3,7 @@ package timescale
 import (
 	"testing"
 
-	"github.com/FreePeak/db-mcp-server/pkg/db"
+	"github.com/FreePeak/infra-mcp-server/pkg/db"
 )
 
 func TestNewDefaultTimescaleDBConfig(t *testing.T) {

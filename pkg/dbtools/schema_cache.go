@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/FreePeak/db-mcp-server/pkg/logger"
+	"github.com/FreePeak/infra-mcp-server/pkg/logger"
 )
 
 // SchemaCache provides a thread-safe cache for database schema information

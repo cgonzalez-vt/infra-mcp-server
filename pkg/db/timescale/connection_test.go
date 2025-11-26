@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/FreePeak/db-mcp-server/pkg/db"
+	"github.com/FreePeak/infra-mcp-server/pkg/db"
 )
 
 func TestNewTimescaleDB(t *testing.T) {

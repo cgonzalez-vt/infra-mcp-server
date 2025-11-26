@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/FreePeak/db-mcp-server/internal/delivery/mcp"
+	"github.com/FreePeak/infra-mcp-server/internal/delivery/mcp"
 )
 
 // MockDatabaseUseCase is a mock implementation of the UseCaseProvider interface

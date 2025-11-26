@@ -1,6 +1,6 @@
 # AWS Infrastructure Integration
 
-This document describes the AWS infrastructure integration in the DB MCP Server, which allows agents to inspect and monitor AWS resources without using CLI commands explicitly.
+This document describes the AWS infrastructure integration in the Infrastructure MCP Server, which allows agents to inspect and monitor AWS resources without using CLI commands explicitly.
 
 ## Overview
 

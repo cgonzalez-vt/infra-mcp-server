@@ -1,7 +1,7 @@
 package timescale
 
 import (
-	"github.com/FreePeak/db-mcp-server/pkg/db"
+	"github.com/FreePeak/infra-mcp-server/pkg/db"
 )
 
 // DBConfig extends PostgreSQL configuration with TimescaleDB-specific options

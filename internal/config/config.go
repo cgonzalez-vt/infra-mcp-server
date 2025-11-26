@@ -9,9 +9,9 @@ import (
 
 	"github.com/joho/godotenv"
 
-	"github.com/FreePeak/db-mcp-server/internal/logger"
-	awspkg "github.com/FreePeak/db-mcp-server/pkg/aws"
-	"github.com/FreePeak/db-mcp-server/pkg/db"
+	"github.com/FreePeak/infra-mcp-server/internal/logger"
+	awspkg "github.com/FreePeak/infra-mcp-server/pkg/aws"
+	"github.com/FreePeak/infra-mcp-server/pkg/db"
 )
 
 // Config holds all server configuration

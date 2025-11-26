@@ -2,7 +2,7 @@
 
 ## Quick Start for Developers
 
-This guide helps you set up AWS integration in the db-mcp-server project.
+This guide helps you set up AWS integration in the infra-mcp-server project.
 
 ## Prerequisites
 

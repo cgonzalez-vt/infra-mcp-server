@@ -19,14 +19,14 @@ TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
 LOG_FILE="logs/cursor-mcp-$TIMESTAMP.log"
 
 # Display startup message
-echo "Starting DB MCP Server for Cursor..." >&2
+echo "Starting Infrastructure MCP Server for Cursor..." >&2
 echo "Config file: $CONFIG_FILE" >&2
 echo "MCP Server Name: $MCP_SERVER_NAME" >&2
 echo "Logs will be written to: $LOG_FILE" >&2
 
 # Run the server in cursor mode with stdio transport
 echo "Starting server..." >&2
-exec ./server \
+exec ./bin/infra-mcp-server \
   -t stdio \
   -c "$CONFIG_FILE" \
   2> >(tee -a "$LOG_FILE" >&2) 

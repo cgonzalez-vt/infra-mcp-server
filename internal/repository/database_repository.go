@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/FreePeak/db-mcp-server/internal/domain"
-	"github.com/FreePeak/db-mcp-server/pkg/dbtools"
+	"github.com/FreePeak/infra-mcp-server/internal/domain"
+	"github.com/FreePeak/infra-mcp-server/pkg/dbtools"
 )
 
 // TODO: Implement caching layer for database metadata to improve performance

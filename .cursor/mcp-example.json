@@ -4,7 +4,7 @@
             "url": "http://127.0.0.1:9092/sse"
         },
         "demo-stdio": {
-            "command": "/Users/harvey/Work/dev/FreePeak/Opensource/db-mcp-server/server",
+            "command": "/Users/harvey/Work/dev/FreePeak/Opensource/infra-mcp-server/server",
             "args": [
                 "-t",
                 "stdio",

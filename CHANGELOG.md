@@ -262,7 +262,7 @@ This release dramatically improves database schema understanding with automatic 
 
 ### Added
 
-- Initial release of DB MCP Server
+- Initial release of Infrastructure MCP Server
 - Multi-database connection support
 - Tool generation for database operations
 - README with guidelines on using tools in Cursor

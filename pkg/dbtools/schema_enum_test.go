@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/FreePeak/db-mcp-server/internal/logger"
-	pkgLogger "github.com/FreePeak/db-mcp-server/pkg/logger"
+	"github.com/FreePeak/infra-mcp-server/internal/logger"
+	pkgLogger "github.com/FreePeak/infra-mcp-server/pkg/logger"
 )
 
 // TestEnumDetectionLive tests enum detection with a real database connection

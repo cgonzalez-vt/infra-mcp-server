@@ -7,8 +7,8 @@ import (
 	"github.com/FreePeak/cortex/pkg/server"
 	"github.com/FreePeak/cortex/pkg/tools"
 
-	"github.com/FreePeak/db-mcp-server/internal/logger"
-	awspkg "github.com/FreePeak/db-mcp-server/pkg/aws"
+	"github.com/FreePeak/infra-mcp-server/internal/logger"
+	awspkg "github.com/FreePeak/infra-mcp-server/pkg/aws"
 )
 
 // AWSManager manages AWS service integrations
@@ -71,14 +71,49 @@ func (am *AWSManager) RegisterTools(ctx context.Context, mcpServer *server.MCPSe
 
 	logger.Info("Registering AWS tools for %d profile(s)", len(profiles))
 
+	skippedCount := 0
+	registeredCount := 0
+
 	for _, profileID := range profiles {
+		// Skip profiles that are pending (either by tag or TODO credentials)
+		if am.isProfilePending(profileID) {
+			logger.Info("Skipping pending AWS profile: %s (credentials not yet configured)", profileID)
+			skippedCount++
+			continue
+		}
+
 		if err := am.registerProfileTools(ctx, mcpServer, profileID); err != nil {
 			logger.Warn("Failed to register AWS tools for profile %s: %v", profileID, err)
 			continue
 		}
+		registeredCount++
 	}
 
+	logger.Info("AWS tool registration complete: %d registered, %d skipped (pending)", registeredCount, skippedCount)
+
 	return nil
+}
+
+// isProfilePending checks if a profile should be skipped due to pending credentials
+func (am *AWSManager) isProfilePending(profileID string) bool {
+	profile, err := am.config.GetProfile(profileID)
+	if err != nil {
+		return false
+	}
+
+	// Check if profile has "pending" tag
+	for _, tag := range profile.Tags {
+		if tag == "pending" {
+			return true
+		}
+	}
+
+	// Check if credentials are TODO placeholders
+	if profile.AccessKeyID == "TODO" || profile.SecretAccessKey == "TODO" {
+		return true
+	}
+
+	return false
 }
 
 // registerProfileTools registers all tools for a specific profile

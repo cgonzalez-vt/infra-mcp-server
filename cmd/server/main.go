@@ -18,13 +18,13 @@ import (
 
 	"github.com/FreePeak/cortex/pkg/server"
 
-	"github.com/FreePeak/db-mcp-server/internal/config"
-	"github.com/FreePeak/db-mcp-server/internal/delivery/mcp"
-	"github.com/FreePeak/db-mcp-server/internal/logger"
-	"github.com/FreePeak/db-mcp-server/internal/repository"
-	"github.com/FreePeak/db-mcp-server/internal/usecase"
-	"github.com/FreePeak/db-mcp-server/pkg/dbtools"
-	pkgLogger "github.com/FreePeak/db-mcp-server/pkg/logger"
+	"github.com/FreePeak/infra-mcp-server/internal/config"
+	"github.com/FreePeak/infra-mcp-server/internal/delivery/mcp"
+	"github.com/FreePeak/infra-mcp-server/internal/logger"
+	"github.com/FreePeak/infra-mcp-server/internal/repository"
+	"github.com/FreePeak/infra-mcp-server/internal/usecase"
+	"github.com/FreePeak/infra-mcp-server/pkg/dbtools"
+	pkgLogger "github.com/FreePeak/infra-mcp-server/pkg/logger"
 )
 
 // findConfigFile attempts to find config.json in the current directory or parent directories
@@ -142,9 +142,9 @@ func main() {
 
 	// Create mcp-go server with our logger's standard logger (compatibility layer)
 	mcpServer := server.NewMCPServer(
-		"DB MCP Server", // Server name
-		"1.0.0",         // Server version
-		nil,             // Use default logger
+		"infrastructure", // Server name
+		"1.0.0",          // Server version
+		nil,              // Use default logger
 	)
 
 	// Set up Clean Architecture layers

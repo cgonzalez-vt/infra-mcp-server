@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/FreePeak/db-mcp-server/pkg/db"
-	"github.com/FreePeak/db-mcp-server/pkg/logger"
-	"github.com/FreePeak/db-mcp-server/pkg/tools"
+	"github.com/FreePeak/infra-mcp-server/pkg/db"
+	"github.com/FreePeak/infra-mcp-server/pkg/logger"
+	"github.com/FreePeak/infra-mcp-server/pkg/tools"
 )
 
 // TODO: Refactor database connection management to support connection pooling
