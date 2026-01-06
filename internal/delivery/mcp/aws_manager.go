@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/FreePeak/cortex/pkg/server"
 	"github.com/FreePeak/cortex/pkg/tools"
@@ -170,22 +171,26 @@ func (am *AWSManager) registerCloudWatchLogsTools(ctx context.Context, mcpServer
 	toolName = fmt.Sprintf("aws_logs_query_%s", profileID)
 	tool = tools.NewTool(
 		toolName,
-		tools.WithDescription(fmt.Sprintf("Query CloudWatch logs in %s", profile.Description)),
+		tools.WithDescription(fmt.Sprintf("Query CloudWatch logs in %s. Defaults to last 24 hours if no time range specified.", profile.Description)),
 		tools.WithString("log_group", tools.Description("Log group name"), tools.Required()),
 		tools.WithString("filter_pattern", tools.Description("Optional filter pattern")),
-		tools.WithNumber("start_time", tools.Description("Start time (ms since epoch)")),
-		tools.WithNumber("end_time", tools.Description("End time (ms since epoch)")),
+		tools.WithNumber("start_time", tools.Description("Start time in milliseconds since epoch (defaults to 24 hours ago)")),
+		tools.WithNumber("end_time", tools.Description("End time in milliseconds since epoch (defaults to now)")),
 		tools.WithNumber("limit", tools.Description("Max events (default: 100)")),
 	)
 	mcpServer.AddTool(ctx, tool, func(ctx context.Context, request server.ToolCallRequest) (interface{}, error) {
 		logGroup, _ := request.Parameters["log_group"].(string)
 		filterPattern, _ := request.Parameters["filter_pattern"].(string)
-		startTime := int64(0)
-		if st, ok := request.Parameters["start_time"].(float64); ok {
+		
+		// Default to last 24 hours if no time range specified
+		now := time.Now()
+		startTime := now.Add(-24 * time.Hour).UnixMilli()
+		endTime := now.UnixMilli()
+		
+		if st, ok := request.Parameters["start_time"].(float64); ok && st > 0 {
 			startTime = int64(st)
 		}
-		endTime := int64(0)
-		if et, ok := request.Parameters["end_time"].(float64); ok {
+		if et, ok := request.Parameters["end_time"].(float64); ok && et > 0 {
 			endTime = int64(et)
 		}
 		limit := int32(100)
