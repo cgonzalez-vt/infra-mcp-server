@@ -129,15 +129,47 @@ func (cw *CloudWatchService) GetLogStreams(ctx context.Context, profileID string
 	return logStreams, nil
 }
 
+// QueryLogsResult contains log events and pagination information
+type QueryLogsResult struct {
+	Events        []LogEvent `json:"events"`
+	TotalReturned int        `json:"total_returned"`
+	HasMore       bool       `json:"has_more"`
+	StartTime     int64      `json:"start_time_ms"`
+	EndTime       int64      `json:"end_time_ms"`
+	TimeRangeInfo string     `json:"time_range_info"`
+}
+
 // QueryLogs queries log events with optional filter pattern
 func (cw *CloudWatchService) QueryLogs(ctx context.Context, profileID string, logGroupName string, filterPattern string, startTime int64, endTime int64, limit int32) ([]LogEvent, error) {
+	result, err := cw.QueryLogsWithPagination(ctx, profileID, logGroupName, filterPattern, startTime, endTime, limit)
+	if err != nil {
+		return nil, err
+	}
+	return result.Events, nil
+}
+
+// QueryLogsWithPagination queries log events with full pagination support
+// It will fetch multiple pages up to the specified limit
+func (cw *CloudWatchService) QueryLogsWithPagination(ctx context.Context, profileID string, logGroupName string, filterPattern string, startTime int64, endTime int64, limit int32) (*QueryLogsResult, error) {
 	client, err := cw.clientManager.GetCloudWatchLogsClient(profileID)
 	if err != nil {
 		return nil, err
 	}
 
+	if limit <= 0 {
+		limit = 100
+	}
+
+	// AWS FilterLogEvents has a max limit of 10000 per call
+	const maxPerCall int32 = 10000
+	callLimit := limit
+	if callLimit > maxPerCall {
+		callLimit = maxPerCall
+	}
+
 	input := &cloudwatchlogs.FilterLogEventsInput{
 		LogGroupName: aws.String(logGroupName),
+		Limit:        aws.Int32(callLimit),
 	}
 
 	if filterPattern != "" {
@@ -149,26 +181,54 @@ func (cw *CloudWatchService) QueryLogs(ctx context.Context, profileID string, lo
 	if endTime > 0 {
 		input.EndTime = aws.Int64(endTime)
 	}
-	if limit > 0 {
-		input.Limit = aws.Int32(limit)
-	}
 
-	result, err := client.FilterLogEvents(ctx, input)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query logs: %w", err)
-	}
+	allEvents := make([]LogEvent, 0)
+	hasMore := false
 
-	logEvents := make([]LogEvent, 0, len(result.Events))
-	for _, event := range result.Events {
-		logEvent := LogEvent{
-			Timestamp:     aws.ToInt64(event.Timestamp),
-			Message:       aws.ToString(event.Message),
-			IngestionTime: aws.ToInt64(event.IngestionTime),
+	// Paginate through results
+	for {
+		result, err := client.FilterLogEvents(ctx, input)
+		if err != nil {
+			return nil, fmt.Errorf("failed to query logs: %w", err)
 		}
-		logEvents = append(logEvents, logEvent)
+
+		for _, event := range result.Events {
+			logEvent := LogEvent{
+				Timestamp:     aws.ToInt64(event.Timestamp),
+				Message:       aws.ToString(event.Message),
+				IngestionTime: aws.ToInt64(event.IngestionTime),
+			}
+			allEvents = append(allEvents, logEvent)
+		}
+
+		// Check if we've reached our limit
+		if int32(len(allEvents)) >= limit {
+			allEvents = allEvents[:limit]
+			hasMore = result.NextToken != nil
+			break
+		}
+
+		// Check if there are more pages
+		if result.NextToken == nil {
+			break
+		}
+
+		input.NextToken = result.NextToken
 	}
 
-	return logEvents, nil
+	// Build time range info for context
+	timeRangeInfo := fmt.Sprintf("Queried from %s to %s",
+		time.UnixMilli(startTime).Format(time.RFC3339),
+		time.UnixMilli(endTime).Format(time.RFC3339))
+
+	return &QueryLogsResult{
+		Events:        allEvents,
+		TotalReturned: len(allEvents),
+		HasMore:       hasMore,
+		StartTime:     startTime,
+		EndTime:       endTime,
+		TimeRangeInfo: timeRangeInfo,
+	}, nil
 }
 
 // TailLogs gets the most recent log events from a log group
@@ -228,3 +288,105 @@ func (cw *CloudWatchService) GetLogEventsByStream(ctx context.Context, profileID
 	return logEvents, nil
 }
 
+// InsightsQueryResult contains CloudWatch Logs Insights query results
+type InsightsQueryResult struct {
+	QueryID       string              `json:"query_id"`
+	Status        string              `json:"status"`
+	Results       []map[string]string `json:"results"`
+	TotalRecords  int                 `json:"total_records"`
+	BytesScanned  float64             `json:"bytes_scanned"`
+	StartTime     int64               `json:"start_time_ms"`
+	EndTime       int64               `json:"end_time_ms"`
+	TimeRangeInfo string              `json:"time_range_info"`
+}// RunInsightsQuery executes a CloudWatch Logs Insights query and waits for results
+// This is more powerful than FilterLogEvents for complex queries over large time ranges
+func (cw *CloudWatchService) RunInsightsQuery(ctx context.Context, profileID string, logGroupNames []string, queryString string, startTime int64, endTime int64, limit int32) (*InsightsQueryResult, error) {
+	client, err := cw.clientManager.GetCloudWatchLogsClient(profileID)
+	if err != nil {
+		return nil, err
+	}
+
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 10000 {
+		limit = 10000 // CloudWatch Logs Insights max limit
+	}
+
+	// Start the query
+	startQueryInput := &cloudwatchlogs.StartQueryInput{
+		LogGroupNames: logGroupNames,
+		StartTime:     aws.Int64(startTime / 1000), // Insights uses seconds, not milliseconds
+		EndTime:       aws.Int64(endTime / 1000),
+		QueryString:   aws.String(queryString),
+		Limit:         aws.Int32(limit),
+	}
+
+	startResult, err := client.StartQuery(ctx, startQueryInput)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start insights query: %w", err)
+	}
+
+	queryID := aws.ToString(startResult.QueryId)
+
+	// Poll for results (with timeout)
+	const maxWait = 60 * time.Second
+	const pollInterval = 500 * time.Millisecond
+	deadline := time.Now().Add(maxWait)
+
+	var queryResults *cloudwatchlogs.GetQueryResultsOutput
+	for time.Now().Before(deadline) {
+		getResultsInput := &cloudwatchlogs.GetQueryResultsInput{
+			QueryId: aws.String(queryID),
+		}
+
+		queryResults, err = client.GetQueryResults(ctx, getResultsInput)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get query results: %w", err)
+		}
+
+		status := queryResults.Status
+		if status == types.QueryStatusComplete || status == types.QueryStatusFailed || status == types.QueryStatusCancelled {
+			break
+		}
+
+		time.Sleep(pollInterval)
+	}
+
+	if queryResults == nil {
+		return nil, fmt.Errorf("query timed out after %v", maxWait)
+	}
+
+	// Parse results
+	results := make([]map[string]string, 0, len(queryResults.Results))
+	for _, row := range queryResults.Results {
+		rowMap := make(map[string]string)
+		for _, field := range row {
+			fieldName := aws.ToString(field.Field)
+			fieldValue := aws.ToString(field.Value)
+			rowMap[fieldName] = fieldValue
+		}
+		results = append(results, rowMap)
+	}
+
+	// Build time range info
+	timeRangeInfo := fmt.Sprintf("Insights query from %s to %s",
+		time.UnixMilli(startTime).Format(time.RFC3339),
+		time.UnixMilli(endTime).Format(time.RFC3339))
+
+	bytesScanned := float64(0)
+	if queryResults.Statistics != nil {
+		bytesScanned = queryResults.Statistics.BytesScanned
+	}
+
+	return &InsightsQueryResult{
+		QueryID:       queryID,
+		Status:        string(queryResults.Status),
+		Results:       results,
+		TotalRecords:  len(results),
+		BytesScanned:  bytesScanned,
+		StartTime:     startTime,
+		EndTime:       endTime,
+		TimeRangeInfo: timeRangeInfo,
+	}, nil
+}

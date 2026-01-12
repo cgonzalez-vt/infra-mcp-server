@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/FreePeak/cortex/pkg/server"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/FreePeak/infra-mcp-server/internal/logger"
 	awspkg "github.com/FreePeak/infra-mcp-server/pkg/aws"
+	"github.com/FreePeak/infra-mcp-server/pkg/common"
 )
 
 // AWSManager manages AWS service integrations
@@ -167,38 +169,176 @@ func (am *AWSManager) registerCloudWatchLogsTools(ctx context.Context, mcpServer
 		return FormatResponse(logGroups, err)
 	})
 
-	// Query logs
+	// Query logs - with human-friendly time range support
 	toolName = fmt.Sprintf("aws_logs_query_%s", profileID)
 	tool = tools.NewTool(
 		toolName,
-		tools.WithDescription(fmt.Sprintf("Query CloudWatch logs in %s. Defaults to last 24 hours if no time range specified.", profile.Description)),
+		tools.WithDescription(fmt.Sprintf(`Query CloudWatch logs in %s. 
+
+TIME RANGE OPTIONS (in order of precedence):
+1. time_range: Use preset like 'last_7_days', 'last_30_days', 'this_month' (EASIEST)
+2. start_date/end_date: Use ISO 8601 format like '2025-01-01' or '2025-01-01T10:00:00Z'
+3. start_time/end_time: Epoch milliseconds (advanced)
+
+Available time_range values: last_1_hour, last_3_hours, last_6_hours, last_12_hours, last_24_hours, last_2_days, last_3_days, last_7_days, last_14_days, last_30_days, last_60_days, last_90_days, today, yesterday, this_week, last_week, this_month, last_month
+
+Defaults to last 24 hours if no time parameters specified.
+
+FILTER PATTERN SYNTAX:
+- Simple text: "ERROR" matches logs containing ERROR
+- Multiple terms: "ERROR memory" matches logs with both terms  
+- Exclude: "ERROR -DEBUG" matches ERROR but not DEBUG
+- JSON fields: { $.level = "error" }`, profile.Description)),
 		tools.WithString("log_group", tools.Description("Log group name"), tools.Required()),
-		tools.WithString("filter_pattern", tools.Description("Optional filter pattern")),
-		tools.WithNumber("start_time", tools.Description("Start time in milliseconds since epoch (defaults to 24 hours ago)")),
-		tools.WithNumber("end_time", tools.Description("End time in milliseconds since epoch (defaults to now)")),
-		tools.WithNumber("limit", tools.Description("Max events (default: 100)")),
+		tools.WithString("filter_pattern", tools.Description("CloudWatch filter pattern. Examples: 'ERROR', 'ERROR -DEBUG', '{ $.level = \"error\" }'")),
+		tools.WithString("time_range", tools.Description("Preset time range: last_1_hour, last_24_hours, last_7_days, last_30_days, this_month, etc.")),
+		tools.WithString("start_date", tools.Description("Start date in ISO 8601 format: '2025-01-01' or '2025-01-01T10:00:00Z'. Ignored if time_range provided.")),
+		tools.WithString("end_date", tools.Description("End date in ISO 8601 format: '2025-01-09' or '2025-01-09T23:59:59Z'. Ignored if time_range provided.")),
+		tools.WithNumber("start_time", tools.Description("(Advanced) Epoch milliseconds. Use start_date for easier input.")),
+		tools.WithNumber("end_time", tools.Description("(Advanced) Epoch milliseconds. Use end_date for easier input.")),
+		tools.WithNumber("limit", tools.Description("Max events to return (default: 100, max: 10000)")),
 	)
 	mcpServer.AddTool(ctx, tool, func(ctx context.Context, request server.ToolCallRequest) (interface{}, error) {
 		logGroup, _ := request.Parameters["log_group"].(string)
 		filterPattern, _ := request.Parameters["filter_pattern"].(string)
-		
-		// Default to last 24 hours if no time range specified
+
+		// Default to last 24 hours
 		now := time.Now()
 		startTime := now.Add(-24 * time.Hour).UnixMilli()
 		endTime := now.UnixMilli()
-		
-		if st, ok := request.Parameters["start_time"].(float64); ok && st > 0 {
-			startTime = int64(st)
+
+		// Priority: time_range > start_date/end_date > start_time/end_time
+		if timeRangeStr, ok := request.Parameters["time_range"].(string); ok && timeRangeStr != "" {
+			tr, err := common.ParseTimeRange(timeRangeStr)
+			if err != nil {
+				return nil, fmt.Errorf("invalid time_range: %w", err)
+			}
+			if tr != nil {
+				startTime = tr.StartMillis()
+				endTime = tr.EndMillis()
+			}
+		} else if startDateStr, ok := request.Parameters["start_date"].(string); ok && startDateStr != "" {
+			// Try ISO date parsing
+			st, err := common.ParseDateTimeMillis(startDateStr)
+			if err != nil {
+				return nil, fmt.Errorf("invalid start_date: %w", err)
+			}
+			if st > 0 {
+				startTime = st
+			}
+			if endDateStr, ok := request.Parameters["end_date"].(string); ok && endDateStr != "" {
+				et, err := common.ParseDateTimeMillis(endDateStr)
+				if err != nil {
+					return nil, fmt.Errorf("invalid end_date: %w", err)
+				}
+				if et > 0 {
+					endTime = et
+				}
+			}
+		} else {
+			// Fall back to epoch milliseconds
+			if st, ok := request.Parameters["start_time"].(float64); ok && st > 0 {
+				startTime = int64(st)
+			}
+			if et, ok := request.Parameters["end_time"].(float64); ok && et > 0 {
+				endTime = int64(et)
+			}
 		}
-		if et, ok := request.Parameters["end_time"].(float64); ok && et > 0 {
-			endTime = int64(et)
-		}
+
 		limit := int32(100)
 		if l, ok := request.Parameters["limit"].(float64); ok {
 			limit = int32(l)
 		}
-		events, err := am.cloudwatchService.QueryLogs(ctx, profileID, logGroup, filterPattern, startTime, endTime, limit)
-		return FormatResponse(events, err)
+
+		result, err := am.cloudwatchService.QueryLogsWithPagination(ctx, profileID, logGroup, filterPattern, startTime, endTime, limit)
+		return FormatResponse(result, err)
+	})
+
+	// CloudWatch Logs Insights query - for complex queries over large time ranges
+	toolName = fmt.Sprintf("aws_logs_insights_%s", profileID)
+	tool = tools.NewTool(
+		toolName,
+		tools.WithDescription(fmt.Sprintf(`Run CloudWatch Logs Insights query in %s.
+
+USE THIS FOR: Complex queries, aggregations, statistics, searching multiple log groups, large time ranges.
+
+TIME RANGE OPTIONS (in order of precedence):
+1. time_range: Use preset like 'last_7_days', 'last_30_days', 'this_month' (EASIEST)
+2. start_date/end_date: Use ISO 8601 format like '2025-01-01' or '2025-01-01T10:00:00Z'
+3. start_time/end_time: Epoch milliseconds (advanced)
+
+QUERY EXAMPLES:
+- Find errors: fields @timestamp, @message | filter @message like /ERROR/ | sort @timestamp desc
+- Count by hour: filter @message like /ERROR/ | stats count(*) by bin(1h)
+- Top log streams: stats count(*) as cnt by @logStream | sort cnt desc | limit 10`, profile.Description)),
+		tools.WithString("log_groups", tools.Description("Comma-separated list of log group names to query"), tools.Required()),
+		tools.WithString("query", tools.Description("CloudWatch Logs Insights query string"), tools.Required()),
+		tools.WithString("time_range", tools.Description("Preset time range: last_1_hour, last_24_hours, last_7_days, last_30_days, this_month, etc.")),
+		tools.WithString("start_date", tools.Description("Start date in ISO 8601 format: '2025-01-01' or '2025-01-01T10:00:00Z'. Ignored if time_range provided.")),
+		tools.WithString("end_date", tools.Description("End date in ISO 8601 format: '2025-01-09' or '2025-01-09T23:59:59Z'. Ignored if time_range provided.")),
+		tools.WithNumber("start_time", tools.Description("(Advanced) Epoch milliseconds. Use start_date for easier input.")),
+		tools.WithNumber("end_time", tools.Description("(Advanced) Epoch milliseconds. Use end_date for easier input.")),
+		tools.WithNumber("limit", tools.Description("Max results (default: 100, max: 10000)")),
+	)
+	mcpServer.AddTool(ctx, tool, func(ctx context.Context, request server.ToolCallRequest) (interface{}, error) {
+		logGroupsStr, _ := request.Parameters["log_groups"].(string)
+		queryStr, _ := request.Parameters["query"].(string)
+
+		// Parse comma-separated log groups
+		logGroups := strings.Split(logGroupsStr, ",")
+		for i := range logGroups {
+			logGroups[i] = strings.TrimSpace(logGroups[i])
+		}
+
+		// Default to last 24 hours
+		now := time.Now()
+		startTime := now.Add(-24 * time.Hour).UnixMilli()
+		endTime := now.UnixMilli()
+
+		// Priority: time_range > start_date/end_date > start_time/end_time
+		if timeRangeStr, ok := request.Parameters["time_range"].(string); ok && timeRangeStr != "" {
+			tr, err := common.ParseTimeRange(timeRangeStr)
+			if err != nil {
+				return nil, fmt.Errorf("invalid time_range: %w", err)
+			}
+			if tr != nil {
+				startTime = tr.StartMillis()
+				endTime = tr.EndMillis()
+			}
+		} else if startDateStr, ok := request.Parameters["start_date"].(string); ok && startDateStr != "" {
+			// Try ISO date parsing
+			st, err := common.ParseDateTimeMillis(startDateStr)
+			if err != nil {
+				return nil, fmt.Errorf("invalid start_date: %w", err)
+			}
+			if st > 0 {
+				startTime = st
+			}
+			if endDateStr, ok := request.Parameters["end_date"].(string); ok && endDateStr != "" {
+				et, err := common.ParseDateTimeMillis(endDateStr)
+				if err != nil {
+					return nil, fmt.Errorf("invalid end_date: %w", err)
+				}
+				if et > 0 {
+					endTime = et
+				}
+			}
+		} else {
+			if st, ok := request.Parameters["start_time"].(float64); ok && st > 0 {
+				startTime = int64(st)
+			}
+			if et, ok := request.Parameters["end_time"].(float64); ok && et > 0 {
+				endTime = int64(et)
+			}
+		}
+
+		limit := int32(100)
+		if l, ok := request.Parameters["limit"].(float64); ok {
+			limit = int32(l)
+		}
+
+		result, err := am.cloudwatchService.RunInsightsQuery(ctx, profileID, logGroups, queryStr, startTime, endTime, limit)
+		return FormatResponse(result, err)
 	})
 
 	logger.Info("Registered CloudWatch Logs tools for profile %s", profileID)
