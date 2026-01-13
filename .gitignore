@@ -26,3 +26,11 @@ logs/
 .DS_Store
 .idea/
 .vscode/
+
+# Release artifacts (built packages)
+# Use `make package` or `./dist/package.sh` to rebuild
+/releases/
+
+# Sensitive config (contains passwords/keys)
+# Keep config.example*.json but ignore actual configs with credentials
+/bin/config.json

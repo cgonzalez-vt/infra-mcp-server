@@ -1,4 +1,4 @@
-.PHONY: build run-stdio run-sse clean test client client-simple test-script build-example docker-build docker-run docker-run-stdio docker-stop docker-build-local docker-build-multiarch docker-pull-platform deploy-docker deploy-docker-simple
+.PHONY: build run-stdio run-sse clean test client client-simple test-script build-example docker-build docker-run docker-run-stdio docker-stop docker-build-local docker-build-multiarch docker-pull-platform deploy-docker deploy-docker-simple package
 
 # Build the server
 build:
@@ -138,6 +138,13 @@ deploy-docker:
 			--push .; \
 	fi; \
 	docker buildx rm multiplatform-builder || true
+
+# Package for distribution (macOS + Linux binaries)
+# Usage: make package VERSION=1.0.0
+# Output: releases/infra-mcp-server-VERSION.{tar.gz,zip}
+package:
+	@echo "Building distribution package..."
+	@VERSION=$${VERSION:-$$(date +%Y%m%d)} ./dist/package.sh
 
 # Default target
 all: build test
